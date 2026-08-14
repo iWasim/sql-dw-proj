@@ -1,0 +1,115 @@
+-- check for nulls or duplicates in primary key
+-- expectation : no results
+
+select
+* 
+from bronze.crm_cust_info;
+
+select
+cst_id,
+count(*)
+from bronze.crm_cust_info
+group by cst_id 
+having count(*)>1 or cst_id is null;
+
+select * from bronze.crm_cust_info where cst_id='29466';
+
+
+select * from (
+select 
+*,
+ROW_NUMBER() over ( partition by cst_id order by cst_create_date desc) as flag_last
+from bronze.crm_cust_info
+--where cst_id='29466'
+) x where flag_last=1
+
+--------------------------
+
+-- Check for unwanted spaces
+-- Expectition: no resumt
+
+select cst_firstname from
+bronze.crm_cust_info
+where cst_firstname!=TRIM(cst_firstname)
+
+select cst_lastname from
+bronze.crm_cust_info
+where cst_lastname!=TRIM(cst_lastname)
+
+select 
+cst_id,
+cst_key,
+TRIM(cst_firstname) cst_firstname,
+TRIM(cst_lastname) cst_lastname,
+case when UPPER(TRIM(cst_material_status))='S' THEN 'Single'
+	 when UPPER(TRIM(cst_material_status))='M' THEN 'Married'
+	 ELSE 'n/a'
+END cst_material_status,
+case when UPPER(TRIM(cst_gndr))='F' THEN 'Female'
+	 when UPPER(TRIM(cst_gndr))='M' THEN 'Male'
+	 ELSE 'n/a'
+END cst_gndr,
+cst_create_date
+from (
+	select 
+	*,
+	ROW_NUMBER() over ( partition by cst_id order by cst_create_date desc) as flag_last
+	from bronze.crm_cust_info
+	where cst_id is not null
+--where cst_id='29466'
+) x where flag_last=1
+
+
+-- Data standardization & Consistency
+--1 low cardinality column ie marital status or gender having less possible values check
+
+select distinct cst_gndr
+from bronze.crm_cust_info
+
+select distinct cst_material_status
+from bronze.crm_cust_info
+
+-- Inserting the cleaned data to silver
+INSERT INTO silver.crm_cust_info(
+	cst_id,
+	cst_key,
+	cst_firstname,
+	cst_lastname,
+	cst_marital_status,
+	cst_gndr,
+	cst_create_date)
+
+select 
+cst_id,
+cst_key,
+TRIM(cst_firstname) cst_firstname,
+TRIM(cst_lastname) cst_lastname,
+case when UPPER(TRIM(cst_material_status))='S' THEN 'Single'
+	 when UPPER(TRIM(cst_material_status))='M' THEN 'Married'
+	 ELSE 'n/a'
+END cst_material_status,
+case when UPPER(TRIM(cst_gndr))='F' THEN 'Female'
+	 when UPPER(TRIM(cst_gndr))='M' THEN 'Male'
+	 ELSE 'n/a'
+END cst_gndr,
+cst_create_date
+from (
+	select 
+	*,
+	ROW_NUMBER() over ( partition by cst_id order by cst_create_date desc) as flag_last
+	from bronze.crm_cust_info
+	where cst_id is not null
+--where cst_id='29466'
+) x where flag_last=1
+
+
+-----
+
+select * from silver.crm_cust_info
+
+select
+cst_id,
+count(*)
+from silver.crm_cust_info
+group by cst_id 
+having count(*)>1 or cst_id is null;
